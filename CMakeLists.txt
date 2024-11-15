@@ -13,13 +13,11 @@ qt_add_executable(appqt-docker-front
 )
 
 qt_add_qml_module(appqt-docker-front
-    URI qt-docker-front
+    URI QtDockerFront
     VERSION 1.0
     QML_FILES
         Main.qml
         SOURCES dockerbackend.h dockerbackend.cpp
-    SOURCES
-        dockerbackend.h dockerbackend.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

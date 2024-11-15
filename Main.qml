@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtDockerFront
 
 ApplicationWindow {
     id: appWindow
@@ -8,6 +9,15 @@ ApplicationWindow {
     visible: true
     title: qsTr("QtDockerFront")
     readonly property int margin: 11
+
+    property int runningContainersCount : 0
+
+    DockerBackend {
+        id: dockerBackend
+        onRunningContainersCountUpdated: (count) => {
+                                             appWindow.runningContainersCount = count
+                                         }
+    }
 
     Component.onCompleted: {
         width = mainLayout.implicitWidth + 2 * margin
@@ -29,7 +39,7 @@ ApplicationWindow {
                 id: overviewLayout
                 anchors.fill: parent
                 Label {
-                    text: "x running containers"
+                    text: appWindow.runningContainersCount + " running containers"
                 }
                 Label {
                     text: "x stopped containers"
