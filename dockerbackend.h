@@ -5,23 +5,6 @@
 #include <QtQml>
 #include <QTimer>
 
-// TODO own header
-class TaskUpdateContainerStatus : public QRunnable
-{
-public:
-    explicit TaskUpdateContainerStatus(std::function<void(int)> callback)
-        : m_callback(std::move(callback))
-    {
-
-    }
-
-    void run() override
-    {
-        m_callback(static_cast<int>(QRandomGenerator::global()->generate()));
-    }
-private:
-    std::function<void(int)> m_callback;
-};
 
 class DockerBackend : public QObject
 {

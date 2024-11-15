@@ -1,4 +1,5 @@
 #include "dockerbackend.h"
+#include "taskfetchcontainers.h"
 #include <QThreadPool>
 
 namespace
@@ -22,8 +23,8 @@ QStringList DockerBackend::containers()
 
 void DockerBackend::pollContainerStatus()
 {
-    auto* containerStatusTask = new TaskUpdateContainerStatus([this](int value){
-        runningContainersCountUpdated(value);
+    auto* fetchContainersTask = new TaskFetchContainers([this](const QStringList& containers){
+        runningContainersCountUpdated(containers.size());
     });
-    QThreadPool::globalInstance()->start(containerStatusTask);
+    QThreadPool::globalInstance()->start(fetchContainersTask);
 }
