@@ -1,5 +1,4 @@
 #include "dockerbackend.h"
-#include "taskfetchcontainers.h"
 #include <QThreadPool>
 
 namespace
@@ -9,22 +8,36 @@ namespace
 DockerBackend::DockerBackend(QObject *parent)
     : QObject{parent}
 {
-    // TODO : threadpool & timer
-    // schedule update task every secondor
+    m_connected = m_dockerAPI.connect();
+    if (m_connected)
+    {
+        QObject::connect(&m_dockerAPI, &DockerAPI::runningContainersReady, this, &DockerBackend::onContainersUpdated);
+        setupPolling();
+    }
+    else
+    {
+        qDebug() << "TODO: display message somewhere for the user";
+    }
+}
+
+void DockerBackend::setupPolling()
+{
     QObject::connect(&m_timer, &QTimer::timeout, this, &DockerBackend::pollContainerStatus);
     m_timer.start(1000);
-
+    m_dockerAPI.queryRunningContainers();
 }
 
 QStringList DockerBackend::containers()
 {
-    return QStringList("paska");
+    return m_containers;
 }
 
 void DockerBackend::pollContainerStatus()
 {
-    auto* fetchContainersTask = new TaskFetchContainers([this](const QStringList& containers){
-        runningContainersCountUpdated(containers.size());
-    });
-    QThreadPool::globalInstance()->start(fetchContainersTask);
+   // m_dockerAPI.queryRunningContainers();
+}
+
+void DockerBackend::onContainersUpdated(const QStringList &containers)
+{
+    m_containers = containers;
 }

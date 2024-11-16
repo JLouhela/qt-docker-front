@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QtQml>
 #include <QTimer>
+#include "dockerapi.h"
 
 
 class DockerBackend : public QObject
@@ -17,14 +18,17 @@ public:
 signals:
     void runningContainersCountUpdated(int count);
 
-public slots:
-    void pollContainerStatus();
+private slots:
+    void onContainersUpdated(const QStringList& containers);
 
 
 private:
+    void setupPolling();
+    void pollContainerStatus();
     QStringList m_containers;
     QTimer m_timer;
-
+    DockerAPI m_dockerAPI;
+    bool m_connected{false};
 };
 
 #endif // DOCKERBACKEND_H
