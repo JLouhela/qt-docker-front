@@ -23,9 +23,9 @@ DockerAPI::DockerAPI(QObject *parent)
 DockerAPI::~DockerAPI()
 {
     // TODO mutex
-    m_socket.disconnectFromServer();
-    if (m_socket.state() == QLocalSocket::UnconnectedState
-        || m_socket.waitForDisconnected(1000))
+    m_socket->disconnectFromServer();
+    if (m_socket->state() == QLocalSocket::UnconnectedState
+        || m_socket->waitForDisconnected(1000))
     {
         qDebug("Disconnected!");
     }
@@ -33,17 +33,28 @@ DockerAPI::~DockerAPI()
 
 void DockerAPI::queryRunningContainers()
 {
+    if (m_socket->state() == QLocalSocket::UnconnectedState)
+    {
+        // Weird workaround hack: socket disconnects for some reason
+        qInfo() << "Socket unconnected!";
+        m_socket->connectToServer("/var/run/docker.sock");
+        if (m_socket->waitForConnected(1000))
+        {
+            qDebug() << "reconnected to docker daemon!";
+        }
+
+    }
     // TODO: split waits to slots
-    m_socket.write("GET /containers/json HTTP/1.1\r\n"
+    m_socket->write("GET /containers/json HTTP/1.1\r\n"
                    "Host: 127.0.0.1\r\n"
                    "Connection: close\r\n"
                    "\r\n");
 
-    m_socket.waitForBytesWritten(300);
-    m_socket.waitForReadyRead(300);
+    m_socket->waitForBytesWritten(300);
+    m_socket->waitForReadyRead(300);
     QByteArray response;
-    while (m_socket.bytesAvailable()) {
-        response.append(m_socket.readAll());
+    while (m_socket->bytesAvailable()) {
+        response.append(m_socket->readAll());
     }
     QString jsonString = getJsonString(QString::fromUtf8(response));
     QJsonParseError jsonError;
@@ -77,13 +88,17 @@ bool DockerAPI::connect()
     // TODO mutex
     // Not portable, windows named pipe: npipe:////./pipe/docker_engine
     // Fine for a linux demo for now
-    m_socket.connectToServer("/var/run/docker.sock");
-    if (m_socket.waitForConnected(1000))
+    if (!m_socket)
+    {
+        m_socket = new QLocalSocket(this);
+    }
+    m_socket->connectToServer("/var/run/docker.sock");
+    if (m_socket->waitForConnected(1000))
     {
         qDebug() << "Connected to docker daemon!";
         return true;
     }
 
-    qDebug() << "Cannot connect to docker daemon! " << m_socket.errorString();
+    qDebug() << "Cannot connect to docker daemon! " << m_socket->errorString();
     return false;
 }

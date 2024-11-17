@@ -1,4 +1,5 @@
 #include "dockerbackend.h"
+#include "overiewupdateworker.h"
 #include <QThreadPool>
 
 namespace
@@ -8,23 +9,20 @@ namespace
 DockerBackend::DockerBackend(QObject *parent)
     : QObject{parent}
 {
-    m_connected = m_dockerAPI.connect();
-    if (m_connected)
-    {
-        QObject::connect(&m_dockerAPI, &DockerAPI::runningContainersReady, this, &DockerBackend::onContainersUpdated);
-        setupPolling();
-    }
-    else
-    {
-        qDebug() << "TODO: display message somewhere for the user";
-    }
+    auto* overviewUpdateWorker = new OverviewUpdateWorker();
+    overviewUpdateWorker->moveToThread(&m_overviewPollingThread);
+    connect(&m_overviewPollingThread, &QThread::finished, overviewUpdateWorker, &QObject::deleteLater);
+    QObject::connect(&m_timer, &QTimer::timeout, overviewUpdateWorker, &OverviewUpdateWorker::queryContainerUpdate);
+    QObject::connect(overviewUpdateWorker, &OverviewUpdateWorker::containersUpdated, this, &DockerBackend::onContainersUpdated);
+    m_overviewPollingThread.start();
+    m_timer.start(1000);
+
 }
 
-void DockerBackend::setupPolling()
+DockerBackend::~DockerBackend()
 {
-    QObject::connect(&m_timer, &QTimer::timeout, this, &DockerBackend::pollContainerStatus);
-    m_timer.start(1000);
-    m_dockerAPI.queryRunningContainers();
+    m_overviewPollingThread.quit();
+    m_overviewPollingThread.wait();
 }
 
 QStringList DockerBackend::containers()
@@ -32,12 +30,10 @@ QStringList DockerBackend::containers()
     return m_containers;
 }
 
-void DockerBackend::pollContainerStatus()
-{
-   // m_dockerAPI.queryRunningContainers();
-}
-
 void DockerBackend::onContainersUpdated(const QStringList &containers)
 {
     m_containers = containers;
+    // TODO keep only one signal and provide getters
+    emit runningContainersCountUpdated(m_containers.size());
+    emit containersChanged();
 }

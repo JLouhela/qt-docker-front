@@ -11,12 +11,16 @@ ApplicationWindow {
     readonly property int margin: 11
 
     property int runningContainersCount : 0
+    property list<string> containerNames : []
 
     DockerBackend {
         id: dockerBackend
         onRunningContainersCountUpdated: (count) => {
                                              appWindow.runningContainersCount = count
                                          }
+        onContainersChanged: () => {
+                                 appWindow.containerNames = dockerBackend.containers
+                             }
     }
 
     Component.onCompleted: {
@@ -60,7 +64,7 @@ ApplicationWindow {
                     Label { text: qsTr("Container") }
 
                     ComboBox {
-                        model: [ " ", "Banana", "Apple", "Coconut" ]
+                        model: appWindow.containerNames
                     }
 
                     Button {

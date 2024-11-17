@@ -19,7 +19,7 @@ signals:
 private slots:
 
 private:
-    QLocalSocket m_socket;
+    QLocalSocket* m_socket;
 
 };
 

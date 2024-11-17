@@ -3,8 +3,8 @@
 
 #include <QObject>
 #include <QtQml>
+#include <QThread>
 #include <QTimer>
-#include "dockerapi.h"
 
 
 class DockerBackend : public QObject
@@ -14,21 +14,20 @@ class DockerBackend : public QObject
     Q_PROPERTY(QStringList containers READ containers)
 public:
     explicit DockerBackend(QObject *parent = nullptr);
+    ~DockerBackend() override;
     QStringList containers();
 signals:
     void runningContainersCountUpdated(int count);
+    void containersChanged();
 
 private slots:
     void onContainersUpdated(const QStringList& containers);
 
 
 private:
-    void setupPolling();
-    void pollContainerStatus();
     QStringList m_containers;
     QTimer m_timer;
-    DockerAPI m_dockerAPI;
-    bool m_connected{false};
+    QThread m_overviewPollingThread;
 };
 
 #endif // DOCKERBACKEND_H
