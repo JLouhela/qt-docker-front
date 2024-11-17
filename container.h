@@ -5,17 +5,23 @@
 
 struct Container
 {
-    enum class Status
+    enum class State
     {
         UNKNOWN,
-        EXITED,
         STOPPED,
+        PAUSED,
+        RESTARTING,
         RUNNING
     };
 
     QString name;
-    Status status{Status::UNKNOWN};
+    State state{State::UNKNOWN};
 };
+
+inline bool operator==(const Container& lhs, const Container& rhs)
+{
+    return lhs.name == rhs.name && lhs.state == rhs.state;
+}
 
 using Containers = QVector<Container>;
 

@@ -11,15 +11,15 @@ ApplicationWindow {
     readonly property int margin: 11
 
     property int runningContainersCount : 0
+    property int stoppedContainersCount : 0
     property list<string> containerNames : []
 
     DockerBackend {
         id: dockerBackend
-        onRunningContainersCountUpdated: (count) => {
-                                             appWindow.runningContainersCount = count
-                                         }
         onContainersChanged: () => {
                                  appWindow.containerNames = dockerBackend.containers
+                                 appWindow.runningContainersCount = dockerBackend.runningContainersCount
+                                 appWindow.stoppedContainersCount = dockerBackend.stoppedContainersCount
                              }
     }
 
@@ -46,7 +46,7 @@ ApplicationWindow {
                     text: appWindow.runningContainersCount + " running containers"
                 }
                 Label {
-                    text: "x stopped containers"
+                    text: appWindow.stoppedContainersCount + " stopped containers"
                 }
             }
         }

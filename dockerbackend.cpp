@@ -15,8 +15,7 @@ DockerBackend::DockerBackend(QObject *parent)
     QObject::connect(&m_timer, &QTimer::timeout, overviewUpdateWorker, &OverviewUpdateWorker::queryContainerUpdate);
     QObject::connect(overviewUpdateWorker, &OverviewUpdateWorker::containersUpdated, this, &DockerBackend::onContainersUpdated);
     m_overviewPollingThread.start();
-    m_timer.start(1000);
-
+    m_timer.start(500);
 }
 
 DockerBackend::~DockerBackend()
@@ -35,10 +34,38 @@ QStringList DockerBackend::containers()
     return result;
 }
 
+int DockerBackend::runningContainersCount()
+{
+    int result{0};
+    for (const auto& container : m_containers)
+    {
+        if (container.state == Container::State::RUNNING)
+        {
+            result++;
+        }
+    }
+    return result;
+}
+
+
+int DockerBackend::stoppedContainersCount()
+{
+    int result{0};
+    for (const auto& container : m_containers)
+    {
+        if (container.state == Container::State::STOPPED)
+        {
+            result++;
+        }
+    }
+    return result;
+}
+
 void DockerBackend::onContainersUpdated(const Containers &containers)
 {
-    m_containers = containers;
-    // TODO keep only one signal and provide getters
-    emit runningContainersCountUpdated(m_containers.size());
-    emit containersChanged();
+    if (containers != m_containers)
+    {
+        m_containers = containers;
+        emit containersChanged();
+    }
 }

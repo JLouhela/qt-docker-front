@@ -12,6 +12,29 @@ QString getJsonString(const QString& daemonResponse)
     const auto endIndex = daemonResponse.lastIndexOf(']') + 1; // keep termination
     return daemonResponse.mid(startIndex, endIndex - startIndex);
 }
+
+Container::State stateFromString(const QString& stateString)
+{
+    // Probably missing something
+    if (stateString == "running")
+    {
+        return Container::State::RUNNING;
+    }
+    else if (stateString == "exited")
+    {
+        return Container::State::STOPPED;
+    }
+    else if (stateString == "paused")
+    {
+        return Container::State::PAUSED;
+    }
+    else if (stateString == "restarting")
+    {
+        return Container::State::RESTARTING;
+    }
+    return Container::State::UNKNOWN;
+}
+
 }
 
 DockerAPI::DockerAPI(QObject *parent)
@@ -76,7 +99,9 @@ void DockerAPI::queryRunningContainers()
         QJsonObject jsonObject = arrayElement.toObject();
         // TODO proper error handling
         const auto containerName = jsonObject.value("Names")[0].toString();
-        result.push_back({containerName, Container::Status::UNKNOWN});
+        const auto stateString = jsonObject.value("State").toString();
+        const auto state = stateFromString(stateString);
+        result.push_back({containerName, state});
     }
     // TODO remove "running" and pass all with state
     emit runningContainersReady(result);

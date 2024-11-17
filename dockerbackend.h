@@ -13,12 +13,16 @@ class DockerBackend : public QObject
     Q_OBJECT
     QML_ELEMENT
     Q_PROPERTY(QStringList containers READ containers)
+    Q_PROPERTY(int runningContainersCount READ runningContainersCount)
+    Q_PROPERTY(int stoppedContainersCount READ stoppedContainersCount)
 public:
     explicit DockerBackend(QObject *parent = nullptr);
     ~DockerBackend() override;
     QStringList containers();
+    int runningContainersCount();
+    int stoppedContainersCount();
+
 signals:
-    void runningContainersCountUpdated(int count);
     void containersChanged();
 
 private slots:
