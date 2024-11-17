@@ -27,10 +27,15 @@ DockerBackend::~DockerBackend()
 
 QStringList DockerBackend::containers()
 {
-    return m_containers;
+    QStringList result;
+    for (const auto& container : m_containers)
+    {
+        result.push_back(container.name);
+    }
+    return result;
 }
 
-void DockerBackend::onContainersUpdated(const QStringList &containers)
+void DockerBackend::onContainersUpdated(const Containers &containers)
 {
     m_containers = containers;
     // TODO keep only one signal and provide getters

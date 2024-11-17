@@ -70,13 +70,13 @@ void DockerAPI::queryRunningContainers()
         return;
     }
     QJsonArray array = doc.array();
-    QStringList result;
+    Containers result;
     for (const auto arrayElement : array)
     {
         QJsonObject jsonObject = arrayElement.toObject();
         // TODO proper error handling
         const auto containerName = jsonObject.value("Names")[0].toString();
-        result.push_back(containerName);
+        result.push_back({containerName, Container::Status::UNKNOWN});
     }
     // TODO remove "running" and pass all with state
     emit runningContainersReady(result);

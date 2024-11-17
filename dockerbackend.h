@@ -5,6 +5,7 @@
 #include <QtQml>
 #include <QThread>
 #include <QTimer>
+#include "container.h"
 
 
 class DockerBackend : public QObject
@@ -21,11 +22,11 @@ signals:
     void containersChanged();
 
 private slots:
-    void onContainersUpdated(const QStringList& containers);
+    void onContainersUpdated(const Containers& containers);
 
 
 private:
-    QStringList m_containers;
+    Containers m_containers;
     QTimer m_timer;
     QThread m_overviewPollingThread;
 };

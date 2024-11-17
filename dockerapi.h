@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QLocalSocket>
+#include "container.h"
 
 class DockerAPI : public QObject
 {
@@ -14,7 +15,7 @@ public:
     bool connect();
 
 signals:
-    void runningContainersReady(const QStringList& containers);
+    void runningContainersReady(const Containers& containers);
 
 private slots:
 

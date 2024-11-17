@@ -12,7 +12,7 @@ OverviewUpdateWorker::OverviewUpdateWorker(QObject *parent)
     }
 }
 
-void OverviewUpdateWorker::onContainersUpdated(const QStringList& containers)
+void OverviewUpdateWorker::onContainersUpdated(const Containers& containers)
 {
     emit containersUpdated(containers);
 }
