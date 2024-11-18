@@ -11,7 +11,7 @@ DockerBackend::DockerBackend(QObject *parent)
 {
     auto* overviewUpdateWorker = new OverviewUpdateWorker();
     overviewUpdateWorker->moveToThread(&m_overviewPollingThread);
-    connect(&m_overviewPollingThread, &QThread::finished, overviewUpdateWorker, &QObject::deleteLater);
+    QObject::connect(&m_overviewPollingThread, &QThread::finished, overviewUpdateWorker, &QObject::deleteLater);
     QObject::connect(&m_timer, &QTimer::timeout, overviewUpdateWorker, &OverviewUpdateWorker::queryContainerUpdate);
     QObject::connect(overviewUpdateWorker, &OverviewUpdateWorker::containersUpdated, this, &DockerBackend::onContainersUpdated);
     m_overviewPollingThread.start();

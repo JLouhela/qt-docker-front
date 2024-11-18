@@ -18,10 +18,10 @@ signals:
     void runningContainersReady(const Containers& containers);
 
 private slots:
+    void onError(QLocalSocket::LocalSocketError socketError);
 
 private:
     QLocalSocket* m_socket;
-
 };
 
 #endif // DOCKERAPI_H

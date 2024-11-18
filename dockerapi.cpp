@@ -35,6 +35,17 @@ Container::State stateFromString(const QString& stateString)
     return Container::State::UNKNOWN;
 }
 
+bool connectSocket(QLocalSocket& socket)
+{
+    socket.connectToServer("/var/run/docker.sock");
+    if (socket.waitForConnected(1000))
+    {
+        qDebug() << "Connected to docker daemon!";
+        return true;
+    }
+    return false;
+}
+
 }
 
 DockerAPI::DockerAPI(QObject *parent)
@@ -45,7 +56,6 @@ DockerAPI::DockerAPI(QObject *parent)
 
 DockerAPI::~DockerAPI()
 {
-    // TODO mutex
     m_socket->disconnectFromServer();
     if (m_socket->state() == QLocalSocket::UnconnectedState
         || m_socket->waitForDisconnected(1000))
@@ -58,33 +68,42 @@ void DockerAPI::queryRunningContainers()
 {
     if (m_socket->state() == QLocalSocket::UnconnectedState)
     {
-        // Weird workaround hack: socket disconnects for some reason
-        qInfo() << "Socket unconnected!";
-        m_socket->connectToServer("/var/run/docker.sock");
-        if (m_socket->waitForConnected(1000))
-        {
-            qDebug() << "reconnected to docker daemon!";
-        }
-
+        // Weird workaround hack: socket disconnects after each query
+        // Not sure if I have time to find out why
+        connectSocket(*m_socket);
     }
-    // TODO: split waits to slots
-    m_socket->write("GET /containers/json HTTP/1.1\r\n"
+
+    m_socket->write("GET /containers/json?all=1 HTTP/1.1\r\n"
                    "Host: 127.0.0.1\r\n"
                    "Connection: close\r\n"
                    "\r\n");
 
-    m_socket->waitForBytesWritten(300);
-    m_socket->waitForReadyRead(300);
+    // By design: share the docker API between different threads
+    // querying different data
+    if (!m_socket->waitForBytesWritten(1000))
+    {
+        qDebug() << "Failed to write HTTP GET for docker daemon";
+    }
+    if (!m_socket->waitForReadyRead(1000))
+    {
+        qDebug() << "Did not receive response from docker daemon";
+    }
     QByteArray response;
-    while (m_socket->bytesAvailable()) {
+    while (m_socket->bytesAvailable())
+    {
         response.append(m_socket->readAll());
     }
     QString jsonString = getJsonString(QString::fromUtf8(response));
+    if (jsonString == "")
+    {
+        return;
+    }
     QJsonParseError jsonError;
     QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8(), &jsonError);
     if (jsonError.error != QJsonParseError::NoError)
     {
         qWarning() << "Failure parsing docker daemon response, " << jsonError.errorString();
+        return;
     }
 
     // Docker format for supported queries is always an array
@@ -97,8 +116,11 @@ void DockerAPI::queryRunningContainers()
     for (const auto arrayElement : array)
     {
         QJsonObject jsonObject = arrayElement.toObject();
-        // TODO proper error handling
-        const auto containerName = jsonObject.value("Names")[0].toString();
+        // TODO error handling
+        QString containerName = jsonObject.value("Names")[0].toString();
+        // Prettify name (erase '/' from the front)
+        containerName.erase(containerName.begin());
+
         const auto stateString = jsonObject.value("State").toString();
         const auto state = stateFromString(stateString);
         result.push_back({containerName, state});
@@ -110,20 +132,24 @@ void DockerAPI::queryRunningContainers()
 
 bool DockerAPI::connect()
 {
-    // TODO mutex
-    // Not portable, windows named pipe: npipe:////./pipe/docker_engine
+        // Not portable, windows named pipe: npipe:////./pipe/docker_engine
     // Fine for a linux demo for now
     if (!m_socket)
     {
         m_socket = new QLocalSocket(this);
+        QObject::connect(m_socket, &QLocalSocket::errorOccurred, this, &DockerAPI::onError);
     }
-    m_socket->connectToServer("/var/run/docker.sock");
-    if (m_socket->waitForConnected(1000))
+
+    if (connectSocket(*m_socket))
     {
-        qDebug() << "Connected to docker daemon!";
         return true;
     }
 
     qDebug() << "Cannot connect to docker daemon! " << m_socket->errorString();
     return false;
+}
+
+void DockerAPI::onError(QLocalSocket::LocalSocketError socketError)
+{
+   // qInfo() << "socket disconnected :(";
 }
