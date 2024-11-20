@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QLocalSocket>
 #include "container.h"
+#include "containerinfo.h"
 
 class DockerAPI : public QObject
 {
@@ -12,15 +13,19 @@ public:
     explicit DockerAPI(QObject *parent = nullptr);
     ~DockerAPI() override;
     void queryRunningContainers();
-    bool connect();
+    void queryContainer(const QString& containerName);
+    bool createSocket();
 
 signals:
-    void runningContainersReady(const Containers& containers);
+    void runningContainersReady(const Containers&);
+    void containerUpdateReady(const ContainerInfo&);
 
 private slots:
     void onError(QLocalSocket::LocalSocketError socketError);
 
 private:
+    void performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler);
+
     QLocalSocket* m_socket;
 };
 

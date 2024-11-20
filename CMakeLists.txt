@@ -20,8 +20,10 @@ qt_add_qml_module(appqt-docker-front
         SOURCES dockerbackend.h dockerbackend.cpp
         SOURCES
         SOURCES dockerapi.h dockerapi.cpp
-        SOURCES overiewupdateworker.h overiewupdateworker.cpp
+        SOURCES overviewupdateworker.h overviewupdateworker.cpp
         SOURCES container.h
+        SOURCES containerupdateworker.h containerupdateworker.cpp
+        SOURCES containerinfo.h
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

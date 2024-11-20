@@ -6,7 +6,7 @@
 #include <QThread>
 #include <QTimer>
 #include "container.h"
-
+#include "containerinfo.h"
 
 class DockerBackend : public QObject
 {
@@ -15,24 +15,38 @@ class DockerBackend : public QObject
     Q_PROPERTY(QStringList containers READ containers)
     Q_PROPERTY(int runningContainersCount READ runningContainersCount)
     Q_PROPERTY(int stoppedContainersCount READ stoppedContainersCount)
+    Q_PROPERTY(double currentContainerCpuUsage READ currentContainerCpuUsage)
+    Q_PROPERTY(QString currentContainerImage READ currentContainerImage)
 public:
     explicit DockerBackend(QObject *parent = nullptr);
     ~DockerBackend() override;
+
+    Q_INVOKABLE void switchActiveContainer(const QString& containerName);
+
     QStringList containers();
     int runningContainersCount();
     int stoppedContainersCount();
+    double currentContainerCpuUsage();
+    QString currentContainerImage();
 
 signals:
     void containersChanged();
+    void containerInfoChanged();
+    void containerQueryRequest(const QString& container);
 
 private slots:
     void onContainersUpdated(const Containers& containers);
-
+    void onContainerUpdated(const ContainerInfo& containerInfo);
+    void onContainerTimerTriggered();
 
 private:
     Containers m_containers;
-    QTimer m_timer;
+    QTimer m_overviewTimer;
+    QTimer m_containerTimer;
     QThread m_overviewPollingThread;
+    QThread m_containerPollingThread;
+    QString m_currentActiveContainer;
+    ContainerInfo m_currentContainerInfo;
 };
 
 #endif // DOCKERBACKEND_H

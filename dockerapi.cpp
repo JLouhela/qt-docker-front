@@ -3,14 +3,49 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QMutex>
+#include <QMutexLocker>
+#include <QThread>
+#include <cstdint>
 
 namespace
 {
 QString getJsonString(const QString& daemonResponse)
 {
-    const auto startIndex = daemonResponse.indexOf('[');
-    const auto endIndex = daemonResponse.lastIndexOf(']') + 1; // keep termination
+    QChar jsonStartChar = '\0';
+    QChar jsonEndChar = '\0';
+
+    if (daemonResponse.indexOf('[') != -1 && daemonResponse.indexOf('[') < daemonResponse.indexOf('{'))
+    {
+        jsonStartChar = '[';
+        jsonEndChar = ']';
+    }
+    else
+    {
+        jsonStartChar = '{';
+        jsonEndChar = '}';
+    }
+
+    const auto startIndex = daemonResponse.indexOf(jsonStartChar);
+    const auto endIndex = daemonResponse.lastIndexOf(jsonEndChar) + 1; // keep termination
     return daemonResponse.mid(startIndex, endIndex - startIndex);
+}
+
+std::string getContainersQuery()
+{
+    return "GET /containers/json?all=1 HTTP/1.1\r\n"
+           "Host: 127.0.0.1\r\n"
+           "Connection: close\r\n"
+           "\r\n";
+}
+
+std::string getContainerInfoQuery(const QString& containerName)
+{
+    QString ret = "GET /containers/" +containerName + "/stats?stream=false HTTP/1.1\r\n"
+           "Host: 127.0.0.1\r\n"
+           "Connection: close\r\n"
+           "\r\n";
+    return ret.toStdString();
 }
 
 Container::State stateFromString(const QString& stateString)
@@ -40,7 +75,6 @@ bool connectSocket(QLocalSocket& socket)
     socket.connectToServer("/var/run/docker.sock");
     if (socket.waitForConnected(1000))
     {
-        qDebug() << "Connected to docker daemon!";
         return true;
     }
     return false;
@@ -66,33 +100,136 @@ DockerAPI::~DockerAPI()
 
 void DockerAPI::queryRunningContainers()
 {
-    if (m_socket->state() == QLocalSocket::UnconnectedState)
-    {
-        // Weird workaround hack: socket disconnects after each query
-        // Not sure if I have time to find out why
-        connectSocket(*m_socket);
-    }
+    const auto parseFunc = [this](const QJsonDocument& jsonDoc){
+        // containers/json response is an array
+        if (!jsonDoc.isArray())
+        {
+            return;
+        }
+        Containers result;
+        QJsonArray array = jsonDoc.array();
+        for (const auto arrayElement : array)
+        {
+            QJsonObject jsonObject = arrayElement.toObject();
+            // TODO error handling
+            QString containerName = jsonObject.value("Names")[0].toString();
+            // Prettify name (erase '/' from the front)
+            containerName.erase(containerName.begin());
 
-    m_socket->write("GET /containers/json?all=1 HTTP/1.1\r\n"
-                   "Host: 127.0.0.1\r\n"
-                   "Connection: close\r\n"
-                   "\r\n");
+            QString image = jsonObject.value("Image").toString();
 
-    // By design: share the docker API between different threads
-    // querying different data
-    if (!m_socket->waitForBytesWritten(1000))
+
+            const auto stateString = jsonObject.value("State").toString();
+            const auto state = stateFromString(stateString);
+            result.push_back({containerName, image, state});
+        }
+        if (!result.empty())
+        {
+            emit runningContainersReady(result);
+        }
+    };
+    performQuery(getContainersQuery().c_str(), parseFunc);
+}
+
+void DockerAPI::queryContainer(const QString& containerName)
+{
+    const auto parseFunc = [this](const QJsonDocument& jsonDoc){
+        // containers status response is an object
+        if (!jsonDoc.isObject())
+        {
+            return;
+        }
+        ContainerInfo result;
+        QJsonObject jsonObj = jsonDoc.object();
+
+/*
+ * cpu_delta = cpu_stats.cpu_usage.total_usage - precpu_stats.cpu_usage.total_usage
+system_cpu_delta = cpu_stats.system_cpu_usage - precpu_stats.system_cpu_usage
+number_cpus = length(cpu_stats.cpu_usage.percpu_usage) or cpu_stats.online_cpus
+CPU usage % = (cpu_delta / system_cpu_delta) * number_cpus * 100.0
+*/
+        // object.value(QString("id")).toVariant().toLongLong();
+        // TODO unpack json
+        const auto cpuStats = jsonObj["cpu_stats"].toObject();
+        const auto cpuUsage = cpuStats["cpu_usage"].toObject();
+        const auto cpuTotalUsage = cpuUsage["total_usage"].toInteger();
+
+        const auto preCpuStats = jsonObj["precpu_stats"].toObject();
+        const auto preCpuUsage = preCpuStats["cpu_usage"].toObject();
+        const auto preCpuTotalUsage = preCpuUsage["total_usage"].toInteger();
+
+        const auto cpuDelta = cpuTotalUsage - preCpuTotalUsage;
+        const auto systemCpuDelta = cpuStats["system_cpu_usage"].toInteger(); - preCpuStats["system_cpu_usage"].toInteger();
+        const auto number_cpus = cpuStats["online_cpus"].toInteger();
+
+        if (number_cpus == 0)
+        {
+            return;
+        }
+        double cpuPercentage = (static_cast<double>(cpuDelta) / systemCpuDelta) * number_cpus * 100.0;
+        result.cpuUsagePercentage = cpuPercentage;
+        emit containerUpdateReady(result);
+
+    };
+    performQuery(getContainerInfoQuery(containerName).c_str(), parseFunc);
+
+}
+
+bool DockerAPI::createSocket()
+{
+    // Not portable, windows named pipe: npipe:////./pipe/docker_engine
+    // Fine for a linux demo for now
+    if (!m_socket)
     {
-        qDebug() << "Failed to write HTTP GET for docker daemon";
+        m_socket = new QLocalSocket(this);
+        QObject::connect(m_socket, &QLocalSocket::errorOccurred, this, &DockerAPI::onError);
     }
-    if (!m_socket->waitForReadyRead(1000))
-    {
-        qDebug() << "Did not receive response from docker daemon";
-    }
+    return true;
+}
+
+void DockerAPI::onError(QLocalSocket::LocalSocketError socketError)
+{
+   // qInfo() << "socket disconnected :(";
+}
+
+void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler)
+{
     QByteArray response;
-    while (m_socket->bytesAvailable())
+    // Static lock to work out design flaws
+    // Socket should not be written by two threads at a same time
+    static QMutex m_lock;
     {
-        response.append(m_socket->readAll());
+        QMutexLocker lockScope(&m_lock);
+        if (m_socket->state() == QLocalSocket::UnconnectedState)
+        {
+            connectSocket(*m_socket);
+        }
+        // Discard possible old stuff
+        m_socket->readAll();
+        m_socket->write(msg);
+
+        // TODO: switch to signal & slot
+        // TODO: Take into account chunked response
+        if (!m_socket->waitForBytesWritten(1000))
+        {
+            qDebug() << "Failed to write HTTP GET for docker daemon";
+        }
+        if (!m_socket->waitForReadyRead(2000))
+        {
+            qDebug() << "Did not receive response from docker daemon";
+        }
+        while (m_socket->bytesAvailable())
+        {
+            // TODO read to string, parse header + end
+            response.append(m_socket->readAll());
+            // Allow some time for docker daemon to write everything
+            // In general, this should be done with readyRead signal
+            // and combining responses together
+            QThread::msleep(50);
+        }
+        m_socket->close();
     }
+    QString rawString = QString::fromUtf8(response);
     QString jsonString = getJsonString(QString::fromUtf8(response));
     if (jsonString == "")
     {
@@ -105,51 +242,5 @@ void DockerAPI::queryRunningContainers()
         qWarning() << "Failure parsing docker daemon response, " << jsonError.errorString();
         return;
     }
-
-    // Docker format for supported queries is always an array
-    if (!doc.isArray())
-    {
-        return;
-    }
-    QJsonArray array = doc.array();
-    Containers result;
-    for (const auto arrayElement : array)
-    {
-        QJsonObject jsonObject = arrayElement.toObject();
-        // TODO error handling
-        QString containerName = jsonObject.value("Names")[0].toString();
-        // Prettify name (erase '/' from the front)
-        containerName.erase(containerName.begin());
-
-        const auto stateString = jsonObject.value("State").toString();
-        const auto state = stateFromString(stateString);
-        result.push_back({containerName, state});
-    }
-    // TODO remove "running" and pass all with state
-    emit runningContainersReady(result);
-
-}
-
-bool DockerAPI::connect()
-{
-        // Not portable, windows named pipe: npipe:////./pipe/docker_engine
-    // Fine for a linux demo for now
-    if (!m_socket)
-    {
-        m_socket = new QLocalSocket(this);
-        QObject::connect(m_socket, &QLocalSocket::errorOccurred, this, &DockerAPI::onError);
-    }
-
-    if (connectSocket(*m_socket))
-    {
-        return true;
-    }
-
-    qDebug() << "Cannot connect to docker daemon! " << m_socket->errorString();
-    return false;
-}
-
-void DockerAPI::onError(QLocalSocket::LocalSocketError socketError)
-{
-   // qInfo() << "socket disconnected :(";
+    jsonHandler(doc);
 }

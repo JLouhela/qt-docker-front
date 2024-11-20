@@ -15,6 +15,7 @@ struct Container
     };
 
     QString name;
+    QString image;
     State state{State::UNKNOWN};
 };
 
@@ -24,5 +25,6 @@ inline bool operator==(const Container& lhs, const Container& rhs)
 }
 
 using Containers = QVector<Container>;
+
 
 #endif // CONTAINER_H

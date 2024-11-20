@@ -12,6 +12,8 @@ ApplicationWindow {
 
     property int runningContainersCount : 0
     property int stoppedContainersCount : 0
+    property real cpuUsagePercentage : 0.0
+    property string image : "N/A"
     property list<string> containerNames : []
 
     DockerBackend {
@@ -20,6 +22,9 @@ ApplicationWindow {
                                  appWindow.containerNames = dockerBackend.containers
                                  appWindow.runningContainersCount = dockerBackend.runningContainersCount
                                  appWindow.stoppedContainersCount = dockerBackend.stoppedContainersCount
+                             }
+        onContainerInfoChanged: () => {
+                                 appWindow.cpuUsagePercentage = dockerBackend.currentContainerCpuUsage
                              }
     }
 
@@ -54,7 +59,7 @@ ApplicationWindow {
         GroupBox {
             id: containerToolBox
             title: qsTr("Container view")
-            Layout.minimumWidth: containerLayout.Layout.minimumWidth + 30
+            Layout.minimumWidth: mainLayout.implicitWidth
 
             ColumnLayout {
                 id: containerToolLayout
@@ -65,19 +70,11 @@ ApplicationWindow {
 
                     ComboBox {
                         model: appWindow.containerNames
-                    }
-
-                    Button {
-                        text: "Start/Stop"
-                        enabled: false
-                    }
-                    Button {
-                        text: ">"
-                        enabled: false
-                    }
-                    Button {
-                        text: "Resource monitor"
-                        enabled: false
+                        onCurrentIndexChanged: {
+                            dockerBackend.switchActiveContainer(appWindow.containerNames[currentIndex])
+                            appWindow.image = dockerBackend.currentContainerImage
+                        }
+                        Layout.minimumWidth: 32;
                     }
                 }
                 GroupBox {
@@ -93,7 +90,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 40
                         }
                         Label {
-                            text: "IMAGE_PLACEHOLDER"
+                            text: appWindow.image
                         }
                         Label {
                             text: "Uptime:"
@@ -103,11 +100,11 @@ ApplicationWindow {
                             text: "UPTIME_PLACEHOLDER"
                         }
                         Label {
-                            text: "Something:"
+                            text: "CPU %:"
                             Layout.preferredWidth: 40
                         }
                         Label {
-                            text: "SOMETHING_PLACEHOLDER"
+                            text: appWindow.cpuUsagePercentage.toFixed(2) + "%"
                         }
                     }
                 }

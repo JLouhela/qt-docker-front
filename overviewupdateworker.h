@@ -1,5 +1,5 @@
-#ifndef OVERIEWUPDATEWORKER_H
-#define OVERIEWUPDATEWORKER_H
+#ifndef OVERVIEWUPDATEWORKER_H
+#define OVERVIEWUPDATEWORKER_H
 
 #include <QObject>
 #include "container.h"
@@ -23,4 +23,4 @@ private:
     DockerAPI* m_dockerAPI;
 };
 
-#endif // OVERIEWUPDATEWORKER_H
+#endif // OVERVIEWUPDATEWORKER_H
