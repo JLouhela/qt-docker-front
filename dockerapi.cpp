@@ -116,11 +116,12 @@ void DockerAPI::queryRunningContainers()
             containerName.erase(containerName.begin());
 
             QString image = jsonObject.value("Image").toString();
+            QString id = jsonObject.value("Id").toString();
 
 
             const auto stateString = jsonObject.value("State").toString();
             const auto state = stateFromString(stateString);
-            result.push_back({containerName, image, state});
+            result.push_back({containerName, id, image, state});
         }
         if (!result.empty())
         {

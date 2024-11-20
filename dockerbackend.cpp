@@ -90,6 +90,20 @@ QString DockerBackend::currentContainerImage()
     return containerIt->image;
 }
 
+QString DockerBackend::currentContainerId()
+{
+    const auto containerIt = std::find_if(
+        m_containers.cbegin(), m_containers.cend(), [this](const Container& container){
+            return container.name == m_currentActiveContainer;
+        });
+
+    if (containerIt == m_containers.end())
+    {
+        return "N/A";
+    }
+    return containerIt->id;
+}
+
 void DockerBackend::onContainersUpdated(const Containers &containers)
 {
     if (containers != m_containers)

@@ -17,6 +17,8 @@ class DockerBackend : public QObject
     Q_PROPERTY(int stoppedContainersCount READ stoppedContainersCount)
     Q_PROPERTY(double currentContainerCpuUsage READ currentContainerCpuUsage)
     Q_PROPERTY(QString currentContainerImage READ currentContainerImage)
+    Q_PROPERTY(QString currentContainerId READ currentContainerId)
+
 public:
     explicit DockerBackend(QObject *parent = nullptr);
     ~DockerBackend() override;
@@ -28,6 +30,7 @@ public:
     int stoppedContainersCount();
     double currentContainerCpuUsage();
     QString currentContainerImage();
+    QString currentContainerId();
 
 signals:
     void containersChanged();

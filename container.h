@@ -15,6 +15,7 @@ struct Container
     };
 
     QString name;
+    QString id;
     QString image;
     State state{State::UNKNOWN};
 };

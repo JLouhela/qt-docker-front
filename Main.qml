@@ -13,7 +13,8 @@ ApplicationWindow {
     property int runningContainersCount : 0
     property int stoppedContainersCount : 0
     property real cpuUsagePercentage : 0.0
-    property string image : "N/A"
+    property string containerImage : "N/A"
+    property string containerId : "N/A"
     property list<string> containerNames : []
 
     DockerBackend {
@@ -73,7 +74,9 @@ ApplicationWindow {
                     model: appWindow.containerNames
                     onCurrentIndexChanged: {
                         dockerBackend.switchActiveContainer(appWindow.containerNames[currentIndex])
-                        appWindow.image = dockerBackend.currentContainerImage
+                        appWindow.containerImage = dockerBackend.currentContainerImage
+                        appWindow.containerId = dockerBackend.currentContainerId
+                        appWindow.cpuUsagePercentage = 0.0
                     }
                     Layout.minimumWidth: 40;
                 }
@@ -87,14 +90,25 @@ ApplicationWindow {
                     flow: GridLayout.LeftToRight
                     anchors.fill: parent
                     Label {
+                        text: "Id:  "
+                        Layout.preferredWidth: 50
+                    }
+                    TextEdit {
+                        text: appWindow.containerId
+                        readOnly: true
+                        selectByMouse: true
+                    }
+                    Label {
                         id: imageText
                         text: "Image:  "
                         Layout.preferredWidth: 50
                     }
-                    Label {
-                        text: appWindow.image
+                    TextEdit {
+                        text: appWindow.containerImage
                         Layout.preferredWidth: containerInfoBox.Layout.preferredWidth - imageText.width
                         clip: true
+                        readOnly: true
+                        selectByMouse: true
                     }
                     Label {
                         text: "Uptime:"
