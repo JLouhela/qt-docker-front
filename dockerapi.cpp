@@ -10,26 +10,6 @@
 
 namespace
 {
-QString getJsonString(const QString& daemonResponse)
-{
-    QChar jsonStartChar = '\0';
-    QChar jsonEndChar = '\0';
-
-    if (daemonResponse.indexOf('[') != -1 && daemonResponse.indexOf('[') < daemonResponse.indexOf('{'))
-    {
-        jsonStartChar = '[';
-        jsonEndChar = ']';
-    }
-    else
-    {
-        jsonStartChar = '{';
-        jsonEndChar = '}';
-    }
-
-    const auto startIndex = daemonResponse.indexOf(jsonStartChar);
-    const auto endIndex = daemonResponse.lastIndexOf(jsonEndChar) + 1; // keep termination
-    return daemonResponse.mid(startIndex, endIndex - startIndex);
-}
 
 std::string getContainersQuery()
 {
@@ -176,7 +156,6 @@ void DockerAPI::queryContainer(const QString& containerName)
         static constexpr qint32 BYTES_TO_MEBIBYTES = 1048576;
         result.memoryUsageMiB = static_cast<double>(memoryTotal) / BYTES_TO_MEBIBYTES;
 
-
         emit containerUpdateReady(result);
 
     };
@@ -190,22 +169,19 @@ bool DockerAPI::createSocket()
     // Fine for a linux demo for now
     if (!m_socket)
     {
+        // Separate function for creating socket in order to be called from the thread context
+        // -> avoid "Cannot create children for a parent that is in a different thread."
         m_socket = new QLocalSocket(this);
-        QObject::connect(m_socket, &QLocalSocket::errorOccurred, this, &DockerAPI::onError);
     }
     return true;
 }
 
-void DockerAPI::onError(QLocalSocket::LocalSocketError socketError)
-{
-   // qInfo() << "socket disconnected :(";
-}
-
 void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler)
 {
-    QByteArray response;
-    // Static lock to work out design flaws
+    QString result;
+    // Static lock to flatten out design flaws
     // Socket should not be written by two threads at a same time
+    // Lessons learned: statemachine and request queue
     static QMutex m_lock;
     {
         QMutexLocker lockScope(&m_lock);
@@ -217,39 +193,49 @@ void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocu
         m_socket->readAll();
         m_socket->write(msg);
 
-        // TODO: switch to signal & slot
-        // TODO: Take into account chunked response
-        if (!m_socket->waitForBytesWritten(1000))
+        if (!m_socket->waitForBytesWritten(3000))
         {
             qDebug() << "Failed to write HTTP GET for docker daemon";
         }
-        if (!m_socket->waitForReadyRead(2000))
+
+        while (m_socket->waitForReadyRead(3000))
         {
-            qDebug() << "Did not receive response from docker daemon";
+
+            qInfo() << "bytes available: " << m_socket->bytesAvailable();
+            QByteArray response;
+            while(m_socket->bytesAvailable() > 0)
+            {
+                response.append(m_socket->readAll());
+            }
+         //   QByteArray response = m_socket->readAll();
+            QStringList responseLines = QString::fromUtf8(response).split("\r\n");
+            const auto terminatorIndex = responseLines.indexOf("0");
+
+            if (terminatorIndex == -1)
+            {
+                if (responseLines.size() > 1)
+                {
+                    result.append(responseLines[responseLines.size() - 1]);
+                }
+                QThread::msleep(100);
+            }
+            else
+            {
+                result.append(responseLines[terminatorIndex - 1]);
+                break;
+            }
         }
-        while (m_socket->bytesAvailable())
-        {
-            // TODO read to string, parse header + end
-            response.append(m_socket->readAll());
-            // Allow some time for docker daemon to write everything
-            // In general, this should be done with readyRead signal
-            // and combining responses together
-            QThread::msleep(50);
-        }
+
+        m_socket->disconnect();
         m_socket->close();
     }
-    QString rawString = QString::fromUtf8(response);
-    QString jsonString = getJsonString(QString::fromUtf8(response));
-    if (jsonString == "")
-    {
-        return;
-    }
     QJsonParseError jsonError;
-    QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8(), &jsonError);
+    QJsonDocument doc = QJsonDocument::fromJson(result.toUtf8(), &jsonError);
     if (jsonError.error != QJsonParseError::NoError)
     {
         qWarning() << "Failure parsing docker daemon response, " << jsonError.errorString();
         return;
     }
+
     jsonHandler(doc);
 }

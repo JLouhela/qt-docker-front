@@ -20,9 +20,6 @@ signals:
     void runningContainersReady(const Containers&);
     void containerUpdateReady(const ContainerInfo&);
 
-private slots:
-    void onError(QLocalSocket::LocalSocketError socketError);
-
 private:
     void performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler);
 
