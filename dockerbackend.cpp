@@ -1,7 +1,6 @@
 #include "dockerbackend.h"
 #include "overviewupdateworker.h"
 #include "containerupdateworker.h"
-#include <QThreadPool>
 
 namespace
 {
