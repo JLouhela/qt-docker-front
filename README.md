@@ -26,6 +26,6 @@ See docker engine API details in https://docs.docker.com/reference/api/engine/
 
 Qt6 required for building the solution
 
-Only tested in native Linux, should also work in WSL.
+Only tested in native Linux, should also work in WSL. Windows support would require changing socket url to pipe location, which itself is a small task, but requires validation on Windows platform. I don't have the environment available right now.
 
-Requires either root permission, or user must have docker group membership (preferred) in order to access the socket.
+**Requires either root permission, or user must have docker group membership (preferred) in order to access the socket.**
