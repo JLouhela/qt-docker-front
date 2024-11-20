@@ -42,11 +42,13 @@ signals:
     void containersChanged();
     void containerInfoChanged();
     void containerQueryRequest(const QString& container);
+    void overviewQueryRequest();
 
 private slots:
     void onContainersUpdated(const Containers& containers);
     void onContainerUpdated(const ContainerInfo& containerInfo);
     void onContainerTimerTriggered();
+    void onOverviewTimerTriggered();
 
 private:
     Containers m_containers;

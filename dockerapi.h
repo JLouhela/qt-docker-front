@@ -22,6 +22,8 @@ signals:
 
 private:
     void performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler);
+    bool connectToSocket();
+    QString exhaustSocket();
 
     QLocalSocket* m_socket;
 };

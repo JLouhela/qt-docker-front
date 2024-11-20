@@ -30,7 +30,6 @@ std::string getContainerInfoQuery(const QString& containerName)
 
 Container::State stateFromString(const QString& stateString)
 {
-    // Probably missing something
     if (stateString == "running")
     {
         return Container::State::RUNNING;
@@ -48,16 +47,6 @@ Container::State stateFromString(const QString& stateString)
         return Container::State::RESTARTING;
     }
     return Container::State::UNKNOWN;
-}
-
-bool connectSocket(QLocalSocket& socket)
-{
-    socket.connectToServer("/var/run/docker.sock");
-    if (socket.waitForConnected(1000))
-    {
-        return true;
-    }
-    return false;
 }
 
 double getCpuUsage(const QJsonObject& jsonObj)
@@ -98,11 +87,6 @@ DockerAPI::DockerAPI(QObject *parent)
 DockerAPI::~DockerAPI()
 {
     m_socket->disconnectFromServer();
-    if (m_socket->state() == QLocalSocket::UnconnectedState
-        || m_socket->waitForDisconnected(1000))
-    {
-        qDebug("Disconnected!");
-    }
 }
 
 void DockerAPI::queryRunningContainers()
@@ -140,13 +124,14 @@ void DockerAPI::queryRunningContainers()
 
 void DockerAPI::queryContainer(const QString& containerName)
 {
-    const auto parseFunc = [this](const QJsonDocument& jsonDoc){
-        // containers status response is an object
+    const auto parseFunc = [this, &containerName](const QJsonDocument& jsonDoc){
+        // container status response is an object
         if (!jsonDoc.isObject())
         {
             return;
         }
         ContainerInfo result;
+        result.name = containerName;
         QJsonObject jsonObj = jsonDoc.object();
         result.cpuUsagePercentage = getCpuUsage(jsonObj);
 
@@ -165,15 +150,16 @@ void DockerAPI::queryContainer(const QString& containerName)
 
 bool DockerAPI::createSocket()
 {
-    // Not portable, windows named pipe: npipe:////./pipe/docker_engine
-    // Fine for a linux demo for now
+    // Separate function for creating socket in order to be called from the thread context
+    // -> avoid "Cannot create children for a parent that is in a different thread."
     if (!m_socket)
     {
-        // Separate function for creating socket in order to be called from the thread context
-        // -> avoid "Cannot create children for a parent that is in a different thread."
         m_socket = new QLocalSocket(this);
+        // Try connecting to socket to see if it's
+        // accessible
+        return connectToSocket();
     }
-    return true;
+    return false;
 }
 
 void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocument& json)> jsonHandler)
@@ -181,53 +167,23 @@ void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocu
     QString result;
     // Static lock to flatten out design flaws
     // Socket should not be written by two threads at a same time
-    // Lessons learned: statemachine and request queue
+    // Lessons learned: statemachine and request queue would be better fit
     static QMutex m_lock;
     {
         QMutexLocker lockScope(&m_lock);
         if (m_socket->state() == QLocalSocket::UnconnectedState)
         {
-            connectSocket(*m_socket);
+            connectToSocket();
         }
-        // Discard possible old stuff
-        m_socket->readAll();
+
         m_socket->write(msg);
 
         if (!m_socket->waitForBytesWritten(3000))
         {
             qDebug() << "Failed to write HTTP GET for docker daemon";
         }
+        result = exhaustSocket();
 
-        while (m_socket->waitForReadyRead(3000))
-        {
-
-            qInfo() << "bytes available: " << m_socket->bytesAvailable();
-            QByteArray response;
-            while(m_socket->bytesAvailable() > 0)
-            {
-                response.append(m_socket->readAll());
-            }
-         //   QByteArray response = m_socket->readAll();
-            QStringList responseLines = QString::fromUtf8(response).split("\r\n");
-            const auto terminatorIndex = responseLines.indexOf("0");
-
-            if (terminatorIndex == -1)
-            {
-                if (responseLines.size() > 1)
-                {
-                    result.append(responseLines[responseLines.size() - 1]);
-                }
-                QThread::msleep(100);
-            }
-            else
-            {
-                result.append(responseLines[terminatorIndex - 1]);
-                break;
-            }
-        }
-
-        m_socket->disconnect();
-        m_socket->close();
     }
     QJsonParseError jsonError;
     QJsonDocument doc = QJsonDocument::fromJson(result.toUtf8(), &jsonError);
@@ -239,3 +195,53 @@ void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocu
 
     jsonHandler(doc);
 }
+
+// Fully exhaust response to a single http GET
+// Docker requests socket closure after read.
+QString DockerAPI::exhaustSocket()
+{
+    QString result;
+    while (m_socket->waitForReadyRead(3000))
+    {
+        QByteArray response;
+        while(m_socket->bytesAvailable() > 0)
+        {
+            response.append(m_socket->readAll());
+        }
+        QStringList responseLines = QString::fromUtf8(response).split("\r\n");
+        const auto terminatorIndex = responseLines.indexOf("0");
+
+        if (terminatorIndex >= 0)
+        {
+            // Terminator found, we have everything
+            result.append(responseLines[terminatorIndex - 1]);
+            break;
+        }
+
+        if (responseLines.size() > 1)
+        {
+            result.append(responseLines[responseLines.size() - 1]);
+        }
+
+    }
+    m_socket->disconnect();
+    m_socket->close();
+    return result;
+}
+
+
+bool DockerAPI::connectToSocket()
+{
+    if (!m_socket)
+    {
+        return false;
+    }
+    // TODO consider windows support, requires configuring socket path or ifdefs
+    m_socket->connectToServer("/var/run/docker.sock");
+    if (m_socket->waitForConnected(1000))
+    {
+        return true;
+    }
+    return false;
+}
+

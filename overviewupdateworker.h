@@ -13,7 +13,7 @@ public:
     explicit OverviewUpdateWorker(QObject *parent = nullptr);
 
 public slots:
-    void queryContainerUpdate();
+    void queryOverviewUpdate();
     void onContainersUpdated(const Containers& containers);
 
 signals:
@@ -21,6 +21,7 @@ signals:
 
 private:
     DockerAPI* m_dockerAPI;
+    bool m_enabled{false};
 };
 
 #endif // OVERVIEWUPDATEWORKER_H

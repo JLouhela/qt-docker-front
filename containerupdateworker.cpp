@@ -5,8 +5,8 @@ ContainerUpdateWorker::ContainerUpdateWorker(QObject *parent)
     : QObject{parent}
     , m_dockerAPI{new DockerAPI(this)}
 {
-    const bool connected = m_dockerAPI->createSocket();
-    if (connected)
+    m_enabled = m_dockerAPI->createSocket();
+    if (m_enabled)
     {
         connect(m_dockerAPI, &DockerAPI::containerUpdateReady, this, &ContainerUpdateWorker::onContainerUpdated);
     }
@@ -19,5 +19,9 @@ void ContainerUpdateWorker::onContainerUpdated(const ContainerInfo& containerInf
 
 void ContainerUpdateWorker::queryContainerUpdate(const QString& containerName)
 {
-    m_dockerAPI->queryContainer(containerName);
+    // Avoid polluting logs with warnings if socket is not accessible
+    if (m_enabled)
+    {
+        m_dockerAPI->queryContainer(containerName);
+    }
 }

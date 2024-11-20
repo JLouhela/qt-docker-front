@@ -15,9 +15,11 @@ DockerBackend::DockerBackend(QObject *parent)
     auto* overviewUpdateWorker = new OverviewUpdateWorker();
     overviewUpdateWorker->moveToThread(&m_overviewPollingThread);
     QObject::connect(&m_overviewPollingThread, &QThread::finished, overviewUpdateWorker, &QObject::deleteLater);
-    QObject::connect(&m_overviewTimer, &QTimer::timeout, overviewUpdateWorker, &OverviewUpdateWorker::queryContainerUpdate);
+    QObject::connect(&m_overviewTimer, &QTimer::timeout, this, &DockerBackend::onOverviewTimerTriggered);
+    QObject::connect(this, &DockerBackend::overviewQueryRequest, overviewUpdateWorker, &OverviewUpdateWorker::queryOverviewUpdate);
     QObject::connect(overviewUpdateWorker, &OverviewUpdateWorker::containersUpdated, this, &DockerBackend::onContainersUpdated);
     m_overviewPollingThread.start();
+    m_overviewTimer.start(1000);
 
     // Worker to update stats for individual container
     auto* containerUpdateWorker = new ContainerUpdateWorker();
@@ -28,12 +30,15 @@ DockerBackend::DockerBackend(QObject *parent)
     QObject::connect(containerUpdateWorker, &ContainerUpdateWorker::containerUpdated, this, &DockerBackend::onContainerUpdated);
     m_containerPollingThread.start();
 
-    m_overviewTimer.start(1000);
+    // Fire overview query immediately on launch
+    overviewQueryRequest();
 }
 
 DockerBackend::~DockerBackend()
 {
+    m_containerPollingThread.quit();
     m_overviewPollingThread.quit();
+    m_containerPollingThread.wait();
     m_overviewPollingThread.wait();
 }
 
@@ -117,7 +122,6 @@ QString DockerBackend::currentContainerId()
     return containerIt->id;
 }
 
-
 QString DockerBackend::currentContainerStatus()
 {
     const auto containerIt = std::find_if(
@@ -143,8 +147,12 @@ void DockerBackend::onContainersUpdated(const Containers &containers)
 
 void DockerBackend::onContainerUpdated(const ContainerInfo& containerInfo)
 {
-    m_currentContainerInfo = containerInfo;
-    emit containerInfoChanged();
+    // Only accept responses to currently active selection
+    if (m_currentActiveContainer == containerInfo.name)
+    {
+        m_currentContainerInfo = containerInfo;
+        emit containerInfoChanged();
+    }
 }
 
 void DockerBackend::switchActiveContainer(const QString& containerName)
@@ -162,18 +170,18 @@ void DockerBackend::switchActiveContainer(const QString& containerName)
         return;
     }
 
-    if (containerIt->state == Container::State::RUNNING)
-    {
-        if (!m_containerTimer.isActive())
-        {
-            m_containerTimer.start(1000);
-            m_currentContainerInfo = ContainerInfo{};
-        }
-    }
-    else
-    {
-        // Stats are only provided for running containers
+    if (containerIt->state != Container::State::RUNNING)
+    {   // Stats are only provided for running containers
+        // If container is not running, polling can be but on hold.
         m_containerTimer.stop();
+        m_currentContainerInfo = ContainerInfo{};
+    }
+    else if (!m_containerTimer.isActive())
+    {
+        // Docker sends oneshot stats once per two seconds
+        m_containerTimer.start(2000);
+        m_currentContainerInfo = ContainerInfo{};
+        onContainerTimerTriggered();
     }
 }
 
@@ -184,4 +192,10 @@ void DockerBackend::onContainerTimerTriggered()
         return;
     }
     emit containerQueryRequest(m_currentActiveContainer);
+}
+
+
+void DockerBackend::onOverviewTimerTriggered()
+{
+    emit overviewQueryRequest();
 }

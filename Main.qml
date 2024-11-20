@@ -7,14 +7,16 @@ ApplicationWindow {
     id: appWindow
 
     visible: true
+    maximumHeight: minimumHeight
+    maximumWidth: minimumWidth
     title: qsTr("QtDockerFront")
     readonly property int margin: 11
 
     property int runningContainersCount : 0
     property int stoppedContainersCount : 0
-    property real cpuUsagePercentage : 0.0
-    property real memoryUsagePercentage : 0.0
-    property real memoryUsageMiB : 0.0
+    property real cpuUsagePercentage : -1.0
+    property real memoryUsagePercentage : -1.0
+    property real memoryUsageMiB : -1.0
     property string containerImage : "N/A"
     property string containerId : "N/A"
     property string containerStatus : "N/A"
@@ -84,11 +86,11 @@ ApplicationWindow {
                         appWindow.containerImage = dockerBackend.currentContainerImage
                         appWindow.containerId = dockerBackend.currentContainerId
                         appWindow.containerStatus = dockerBackend.currentContainerStatus
-                        appWindow.cpuUsagePercentage = 0.0
-                        appWindow.memoryUsagePercentage = 0.0
-                        appWindow.memoryUsageMiB = 0.0
+                        appWindow.cpuUsagePercentage = -1.0
+                        appWindow.memoryUsagePercentage = -1.0
+                        appWindow.memoryUsageMiB = -1.0
                     }
-                    Layout.minimumWidth: 40;
+                    implicitContentWidthPolicy: ComboBox.WidestText;
                 }
             }
             GroupBox {
@@ -132,14 +134,14 @@ ApplicationWindow {
                         Layout.preferredWidth: 50
                     }
                     Label {
-                        text: appWindow.cpuUsagePercentage.toFixed(2) + "%"
+                        text: appWindow.cpuUsagePercentage < 0.0 ? "N/A" : (appWindow.cpuUsagePercentage.toFixed(2) + "%")
                     }
                     Label {
-                        text: "MEM: "
+                        text: "Mem: "
                         Layout.preferredWidth: 50
                     }
                     Label {
-                        text: appWindow.memoryUsagePercentage.toFixed(2) + "% (" + appWindow.memoryUsageMiB.toFixed(2) + " MiB)"
+                        text: appWindow.memoryUsagePercentage < 0.0 ? "N/A" : (appWindow.memoryUsagePercentage.toFixed(2) + "% (" + appWindow.memoryUsageMiB.toFixed(2) + " MiB)")
                     }
                 }
             }

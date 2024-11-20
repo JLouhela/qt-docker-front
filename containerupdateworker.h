@@ -21,6 +21,7 @@ signals:
 
 private:
     DockerAPI* m_dockerAPI;
+    bool m_enabled{false};
 };
 
 #endif // CONTAINERUPDATEWORKER_H
