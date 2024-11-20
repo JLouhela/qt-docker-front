@@ -111,7 +111,6 @@ void DockerAPI::queryRunningContainers()
         for (const auto arrayElement : array)
         {
             QJsonObject jsonObject = arrayElement.toObject();
-            // TODO error handling
             QString containerName = jsonObject.value("Names")[0].toString();
             // Prettify name (erase '/' from the front)
             containerName.erase(containerName.begin());

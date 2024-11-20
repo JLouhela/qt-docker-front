@@ -40,6 +40,7 @@ ApplicationWindow {
         id: mainLayout
         anchors.fill: parent
         anchors.margins: appWindow.margin
+        Layout.minimumWidth: 700
         GroupBox {
             id: rowBox
             title: qsTr("Overview")
@@ -56,61 +57,63 @@ ApplicationWindow {
             }
         }
 
-        GroupBox {
-            id: containerToolBox
-            title: qsTr("Container view")
-            Layout.minimumWidth: mainLayout.implicitWidth
 
-            ColumnLayout {
-                id: containerToolLayout
-                RowLayout {
-                    id: containerLayout
+        ColumnLayout {
+            id: containerToolLayout
+            RowLayout {
+                id: containerLayout
 
-                    Label { text: qsTr("Container") }
-
-                    ComboBox {
-                        model: appWindow.containerNames
-                        onCurrentIndexChanged: {
-                            dockerBackend.switchActiveContainer(appWindow.containerNames[currentIndex])
-                            appWindow.image = dockerBackend.currentContainerImage
-                        }
-                        Layout.minimumWidth: 32;
-                    }
+                Label {
+                    text: qsTr("Container")
+                    Layout.maximumWidth: 20
                 }
-                GroupBox {
-                    id: containerInfoBox
-                    Layout.preferredWidth: containerLayout.width
+                Layout.minimumWidth: mainLayout.Layout.minimumWidth
 
-                    GridLayout {
-                        columns: 2
-                        flow: GridLayout.LeftToRight
-                        anchors.fill: parent
-                        Label {
-                            text: "Image:"
-                            Layout.preferredWidth: 40
-                        }
-                        Label {
-                            text: appWindow.image
-                        }
-                        Label {
-                            text: "Uptime:"
-                            Layout.preferredWidth: 40
-                        }
-                        Label {
-                            text: "UPTIME_PLACEHOLDER"
-                        }
-                        Label {
-                            text: "CPU %:"
-                            Layout.preferredWidth: 40
-                        }
-                        Label {
-                            text: appWindow.cpuUsagePercentage.toFixed(2) + "%"
-                        }
+                ComboBox {
+                    model: appWindow.containerNames
+                    onCurrentIndexChanged: {
+                        dockerBackend.switchActiveContainer(appWindow.containerNames[currentIndex])
+                        appWindow.image = dockerBackend.currentContainerImage
+                    }
+                    Layout.minimumWidth: 40;
+                }
+            }
+            GroupBox {
+                id: containerInfoBox
+                Layout.preferredWidth: containerLayout.width
+
+                GridLayout {
+                    columns: 2
+                    flow: GridLayout.LeftToRight
+                    anchors.fill: parent
+                    Label {
+                        id: imageText
+                        text: "Image:  "
+                        Layout.preferredWidth: 50
+                    }
+                    Label {
+                        text: appWindow.image
+                        Layout.preferredWidth: containerInfoBox.Layout.preferredWidth - imageText.width
+                        clip: true
+                    }
+                    Label {
+                        text: "Uptime:"
+                        Layout.preferredWidth: 50
+                    }
+                    Label {
+                        text: "UPTIME_PLACEHOLDER"
+                    }
+                    Label {
+                        text: "CPU: "
+                        Layout.preferredWidth: 50
+                    }
+                    Label {
+                        text: appWindow.cpuUsagePercentage.toFixed(4) + "%"
                     }
                 }
             }
-
         }
+
 
     }
 }
