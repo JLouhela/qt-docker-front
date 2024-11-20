@@ -80,6 +80,33 @@ bool connectSocket(QLocalSocket& socket)
     return false;
 }
 
+double getCpuUsage(const QJsonObject& jsonObj)
+{
+    const auto cpuStats = jsonObj["cpu_stats"].toObject();
+    const auto cpuUsage = cpuStats["cpu_usage"].toObject();
+    const auto cpuTotalUsage = cpuUsage["total_usage"].toInteger();
+
+    const auto preCpuStats = jsonObj["precpu_stats"].toObject();
+    const auto preCpuUsage = preCpuStats["cpu_usage"].toObject();
+    const auto preCpuTotalUsage = preCpuUsage["total_usage"].toInteger();
+
+    const auto cpuDelta = cpuTotalUsage - preCpuTotalUsage;
+    const auto systemCpuDelta = cpuStats["system_cpu_usage"].toInteger() - preCpuStats["system_cpu_usage"].toInteger();
+    const auto number_cpus = cpuStats["online_cpus"].toInteger(1);
+
+    return (static_cast<double>(cpuDelta) / systemCpuDelta) * number_cpus * 100.0;
+}
+
+// Pair of percentage, bytes
+std::pair<double, qint64> getMemoryUsage(const QJsonObject& jsonObj)
+{
+    const auto memStats = jsonObj["memory_stats"].toObject();
+    const auto stats = memStats["stats"].toObject();
+    const auto usedMemory = memStats["usage"].toInteger() - stats["cache"].toInteger();
+    const auto availableMemory = memStats["limit"].toInteger();
+    return std::make_pair(((static_cast<double>(usedMemory) / availableMemory) * 100.0), usedMemory);
+}
+
 }
 
 DockerAPI::DockerAPI(QObject *parent)
@@ -117,11 +144,11 @@ void DockerAPI::queryRunningContainers()
 
             QString image = jsonObject.value("Image").toString();
             QString id = jsonObject.value("Id").toString();
-
+            QString status = jsonObject.value("Status").toString();
 
             const auto stateString = jsonObject.value("State").toString();
             const auto state = stateFromString(stateString);
-            result.push_back({containerName, id, image, state});
+            result.push_back({containerName, id, image, status, state});
         }
         if (!result.empty())
         {
@@ -141,33 +168,15 @@ void DockerAPI::queryContainer(const QString& containerName)
         }
         ContainerInfo result;
         QJsonObject jsonObj = jsonDoc.object();
+        result.cpuUsagePercentage = getCpuUsage(jsonObj);
 
-/*
- * cpu_delta = cpu_stats.cpu_usage.total_usage - precpu_stats.cpu_usage.total_usage
-system_cpu_delta = cpu_stats.system_cpu_usage - precpu_stats.system_cpu_usage
-number_cpus = length(cpu_stats.cpu_usage.percpu_usage) or cpu_stats.online_cpus
-CPU usage % = (cpu_delta / system_cpu_delta) * number_cpus * 100.0
-*/
-        // object.value(QString("id")).toVariant().toLongLong();
-        // TODO unpack json
-        const auto cpuStats = jsonObj["cpu_stats"].toObject();
-        const auto cpuUsage = cpuStats["cpu_usage"].toObject();
-        const auto cpuTotalUsage = cpuUsage["total_usage"].toInteger();
+        auto[memoryPercentage, memoryTotal] = getMemoryUsage(jsonObj);
+        result.memoryUsagePercentage = memoryPercentage;
 
-        const auto preCpuStats = jsonObj["precpu_stats"].toObject();
-        const auto preCpuUsage = preCpuStats["cpu_usage"].toObject();
-        const auto preCpuTotalUsage = preCpuUsage["total_usage"].toInteger();
+        static constexpr qint32 BYTES_TO_MEBIBYTES = 1048576;
+        result.memoryUsageMiB = static_cast<double>(memoryTotal) / BYTES_TO_MEBIBYTES;
 
-        const auto cpuDelta = cpuTotalUsage - preCpuTotalUsage;
-        const auto systemCpuDelta = cpuStats["system_cpu_usage"].toInteger(); - preCpuStats["system_cpu_usage"].toInteger();
-        const auto number_cpus = cpuStats["online_cpus"].toInteger();
 
-        if (number_cpus == 0)
-        {
-            return;
-        }
-        double cpuPercentage = (static_cast<double>(cpuDelta) / systemCpuDelta) * number_cpus * 100.0;
-        result.cpuUsagePercentage = cpuPercentage;
         emit containerUpdateReady(result);
 
     };

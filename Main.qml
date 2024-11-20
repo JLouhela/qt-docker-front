@@ -13,8 +13,11 @@ ApplicationWindow {
     property int runningContainersCount : 0
     property int stoppedContainersCount : 0
     property real cpuUsagePercentage : 0.0
+    property real memoryUsagePercentage : 0.0
+    property real memoryUsageMiB : 0.0
     property string containerImage : "N/A"
     property string containerId : "N/A"
+    property string containerStatus : "N/A"
     property list<string> containerNames : []
 
     DockerBackend {
@@ -25,7 +28,9 @@ ApplicationWindow {
                                  appWindow.stoppedContainersCount = dockerBackend.stoppedContainersCount
                              }
         onContainerInfoChanged: () => {
-                                 appWindow.cpuUsagePercentage = dockerBackend.currentContainerCpuUsage
+                                    appWindow.cpuUsagePercentage = dockerBackend.currentContainerCpuUsage
+                                    appWindow.memoryUsagePercentage = dockerBackend.currentContainerMemoryPercentage
+                                    appWindow.memoryUsageMiB = dockerBackend.currentContainerMemoryUsage
                              }
     }
 
@@ -42,9 +47,11 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: appWindow.margin
         Layout.minimumWidth: 700
+        Label {
+            text: "Overview"
+        }
         GroupBox {
             id: rowBox
-            title: qsTr("Overview")
 
             ColumnLayout {
                 id: overviewLayout
@@ -66,7 +73,7 @@ ApplicationWindow {
 
                 Label {
                     text: qsTr("Container")
-                    Layout.maximumWidth: 20
+                    Layout.maximumWidth: 12
                 }
                 Layout.minimumWidth: mainLayout.Layout.minimumWidth
 
@@ -76,7 +83,10 @@ ApplicationWindow {
                         dockerBackend.switchActiveContainer(appWindow.containerNames[currentIndex])
                         appWindow.containerImage = dockerBackend.currentContainerImage
                         appWindow.containerId = dockerBackend.currentContainerId
+                        appWindow.containerStatus = dockerBackend.currentContainerStatus
                         appWindow.cpuUsagePercentage = 0.0
+                        appWindow.memoryUsagePercentage = 0.0
+                        appWindow.memoryUsageMiB = 0.0
                     }
                     Layout.minimumWidth: 40;
                 }
@@ -111,18 +121,25 @@ ApplicationWindow {
                         selectByMouse: true
                     }
                     Label {
-                        text: "Uptime:"
+                        text: "Status:  "
                         Layout.preferredWidth: 50
                     }
                     Label {
-                        text: "UPTIME_PLACEHOLDER"
+                        text: appWindow.containerStatus
                     }
                     Label {
                         text: "CPU: "
                         Layout.preferredWidth: 50
                     }
                     Label {
-                        text: appWindow.cpuUsagePercentage.toFixed(4) + "%"
+                        text: appWindow.cpuUsagePercentage.toFixed(2) + "%"
+                    }
+                    Label {
+                        text: "MEM: "
+                        Layout.preferredWidth: 50
+                    }
+                    Label {
+                        text: appWindow.memoryUsagePercentage.toFixed(2) + "% (" + appWindow.memoryUsageMiB.toFixed(2) + " MiB)"
                     }
                 }
             }

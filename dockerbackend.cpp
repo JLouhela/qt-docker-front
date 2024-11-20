@@ -10,6 +10,8 @@ namespace
 DockerBackend::DockerBackend(QObject *parent)
     : QObject{parent}
 {
+
+    // Worker to update overview (available containers)
     auto* overviewUpdateWorker = new OverviewUpdateWorker();
     overviewUpdateWorker->moveToThread(&m_overviewPollingThread);
     QObject::connect(&m_overviewPollingThread, &QThread::finished, overviewUpdateWorker, &QObject::deleteLater);
@@ -17,6 +19,7 @@ DockerBackend::DockerBackend(QObject *parent)
     QObject::connect(overviewUpdateWorker, &OverviewUpdateWorker::containersUpdated, this, &DockerBackend::onContainersUpdated);
     m_overviewPollingThread.start();
 
+    // Worker to update stats for individual container
     auto* containerUpdateWorker = new ContainerUpdateWorker();
     containerUpdateWorker->moveToThread(&m_containerPollingThread);
     QObject::connect(&m_containerPollingThread, &QThread::finished, containerUpdateWorker, &QObject::deleteLater);
@@ -25,7 +28,7 @@ DockerBackend::DockerBackend(QObject *parent)
     QObject::connect(containerUpdateWorker, &ContainerUpdateWorker::containerUpdated, this, &DockerBackend::onContainerUpdated);
     m_containerPollingThread.start();
 
-    m_overviewTimer.start(2000);
+    m_overviewTimer.start(1000);
 }
 
 DockerBackend::~DockerBackend()
@@ -76,6 +79,16 @@ double DockerBackend::currentContainerCpuUsage()
     return m_currentContainerInfo.cpuUsagePercentage;
 }
 
+double DockerBackend::currentContainerMemoryUsage()
+{
+    return m_currentContainerInfo.memoryUsageMiB;
+}
+
+double DockerBackend::currentContainerMemoryPercentage()
+{
+    return m_currentContainerInfo.memoryUsagePercentage;
+}
+
 QString DockerBackend::currentContainerImage()
 {
     const auto containerIt = std::find_if(
@@ -102,6 +115,21 @@ QString DockerBackend::currentContainerId()
         return "N/A";
     }
     return containerIt->id;
+}
+
+
+QString DockerBackend::currentContainerStatus()
+{
+    const auto containerIt = std::find_if(
+        m_containers.cbegin(), m_containers.cend(), [this](const Container& container){
+            return container.name == m_currentActiveContainer;
+        });
+
+    if (containerIt == m_containers.end())
+    {
+        return "N/A";
+    }
+    return containerIt->status;
 }
 
 void DockerBackend::onContainersUpdated(const Containers &containers)
