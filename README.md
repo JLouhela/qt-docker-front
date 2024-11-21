@@ -9,7 +9,9 @@ Application connects tp unix socket serving docker engine API. It polls data per
 
 ## Tech
 
-Uses two background threads (one for overview of available containers and one for stats) to send HTTP GET messages into docker socket, receive responses and parse the json content from the response. Serves as an examples of how to 
+I had some false assumptions in the beginning and had to adjust the architecture accordingly. a) I did not understand that signal/slot system is a robust way to handle asynchronous tasks and b) I did not realize that usage of socket is not allowed from different threads. I didn't want to overcomplicate this exercise and start all over. Instead, design evolved in a way that everything works, but it is not the best way to handle the issue. See lessons learned below for alternate solution.
+
+Anyway, here is the tech used within this project. Solution uses two background threads (one for overview of available containers and one for stats) to send HTTP GET messages into docker socket, receive responses and parse the json content from the response. Serves as an examples of how to 
 - Use C++ backend from qml file
 - Use QThreads with worker scheme
 - Use QTimer for periodical polling
@@ -22,10 +24,19 @@ Uses two background threads (one for overview of available containers and one fo
 See docker engine API details in https://docs.docker.com/reference/api/engine/
 
 
+## Lessons learned
+
+As mentioned above, I would approach this problem a bit differently with gained knowledge. Instead of polling threads and separate socket instances, I would try to go with finite state machine with a request queue. Just process one request at a time in the event loop using signals and slots only.
+- No Threads needed
+- Single socket instance used from single thread, responses handled asynchronously via socket signals
+
+
 ## Prerequirements
 
 Qt6 required for building the solution
 
-Only tested in native Linux, should also work in WSL. Windows support would require changing socket url to pipe location, which itself is a small task, but requires validation on Windows platform. I don't have the environment available right now.
+Tested and developed in native Linux, should also work in WSL. Socket path cannot be configured.
+
+Quickly tested in Windows too and adjusted socket path to match docker pipe in Windows. Doesn't work as good as Linux, but did not check why this 
 
 **Requires either root permission, or user must have docker group membership (preferred) in order to access the socket.**

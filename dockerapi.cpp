@@ -6,7 +6,6 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QThread>
-#include <cstdint>
 
 namespace
 {
@@ -157,7 +156,7 @@ bool DockerAPI::createSocket()
         m_socket = new QLocalSocket(this);
         // Try connecting to socket to see if it's
         // accessible
-        return connectToSocket();
+        return connectSocket();
     }
     return false;
 }
@@ -173,7 +172,7 @@ void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocu
         QMutexLocker lockScope(&m_lock);
         if (m_socket->state() == QLocalSocket::UnconnectedState)
         {
-            connectToSocket();
+            connectSocket();
         }
 
         m_socket->write(msg);
@@ -184,6 +183,11 @@ void DockerAPI::performQuery(const char* msg, std::function<void(const QJsonDocu
         }
         result = exhaustSocket();
 
+    }
+    if (result == "")
+    {
+        // Seems to happen in Windows, cannot help this one out
+        return;
     }
     QJsonParseError jsonError;
     QJsonDocument doc = QJsonDocument::fromJson(result.toUtf8(), &jsonError);
@@ -211,33 +215,41 @@ QString DockerAPI::exhaustSocket()
         QStringList responseLines = QString::fromUtf8(response).split("\r\n");
         const auto terminatorIndex = responseLines.indexOf("0");
 
-        if (terminatorIndex >= 0)
+        if (terminatorIndex == 0)
         {
-            // Terminator found, we have everything
+            // Message was complete on the last read, nothing tbd
+            break;
+        }
+        else if (terminatorIndex > 0)
+        {
+            // Terminator found, need to copy still stuff but nothing more to come
             result.append(responseLines[terminatorIndex - 1]);
             break;
         }
-
         if (responseLines.size() > 1)
         {
             result.append(responseLines[responseLines.size() - 1]);
         }
-
     }
     m_socket->disconnect();
     m_socket->close();
     return result;
 }
 
-
-bool DockerAPI::connectToSocket()
+bool DockerAPI::connectSocket()
 {
     if (!m_socket)
     {
         return false;
     }
-    // TODO consider windows support, requires configuring socket path or ifdefs
-    m_socket->connectToServer("/var/run/docker.sock");
+
+    // Note: Only default paths supported here
+    //       Should be configurable
+    QString socketPath = "/var/run/docker.sock";
+#ifdef _WIN32
+    socketPath = "\\\\.\\pipe\\docker_engine";
+#endif
+    m_socket->connectToServer(socketPath);
     if (m_socket->waitForConnected(1000))
     {
         return true;
