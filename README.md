@@ -2,7 +2,7 @@
 
 ## QtQuick application displaying sample stats from docker containers.
 
-Application connects tp unix socket serving docker engine API. It polls data periodically from the docker engine socket and displays it on the screen. If there are no containers, or docker unix socket is not available in the default location (var/run/docker.sock), the application will only display N/A values with empty dropdown menu. If socket is accessible and there are containers available (both stopped and running are accepted) in the docker engine, the application will display some basic information of the each container. CPU and Memory stats are only available for running containers.
+Application connects tp unix socket serving docker engine API. It polls data periodically from the docker engine socket and displays it on the screen. If there are no containers, or docker unix socket is not available in the default location (var/run/docker.sock in Linux, \\.\pipe\docker_engine in Windows), the application will only display N/A values with empty dropdown menu. If socket is accessible and there are containers available (both stopped and running are accepted) in the docker engine, the application will display some basic information of the each container. CPU and Memory stats are only available for running containers.
 
 ![Image of the application](screenshot_qt_front.png?raw=true "QtDockerFront")
 
@@ -29,14 +29,15 @@ See docker engine API details in https://docs.docker.com/reference/api/engine/
 As mentioned above, I would approach this problem a bit differently with gained knowledge. Instead of polling threads and separate socket instances, I would try to go with finite state machine with a request queue. Just process one request at a time in the event loop using signals and slots only.
 - No Threads needed
 - Single socket instance used from single thread, responses handled asynchronously via socket signals
+- Less "proxy" signals to delegate data from threads towards qml
 
 
 ## Prerequirements
 
 Qt6 required for building the solution
 
-Tested and developed in native Linux, should also work in WSL. Socket path cannot be configured.
+Tested and developed in native Linux, should also work in WSL. Socket path cannot be configured currently.
 
-Quickly tested in Windows too and adjusted socket path to match docker pipe in Windows. Doesn't work as good as Linux, but did not check why this 
+Quickly tested in Windows too and adjusted socket path to match docker pipe in Windows. Doesn't work as good as Linux (polling seems to react slower, local socket receives empty messags), but did not check in details why it's like this.
 
 **Requires either root permission, or user must have docker group membership (preferred) in order to access the socket.**
